@@ -12,9 +12,9 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-deltalake-core = { version = "0.17.0", path = "../core" }
-hdfs-native-object-store = { version = "0.9.2", features = ["kerberos"]}
-hdfs-native = { version = "0.9.2", features = ["kerberos"]}
+deltalake-core = { version = "0.18.0", path = "../core" }
+hdfs-native-object-store = { version = "0.10.0", features = ["kerberos"]}
+hdfs-native = { version = "0.9.4", features = ["kerberos"]}
 
 # workspace dependecies
 async-trait = { workspace = true }

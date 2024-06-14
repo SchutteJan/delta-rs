@@ -42,7 +42,7 @@ impl ObjectStoreFactory for HdfsFactory {
         options: &StorageOptions,
     ) -> DeltaResult<(ObjectStoreRef, Path)> {
         let _config = config::HdfsConfigHelper::try_new(options.as_hdfs_options())?;
-        let client = Client::new(url.to_string().as_str()).unwrap();
+        let client = Arc::new(Client::new(url.to_string().as_str()).unwrap());
 
         let store = Arc::new(HdfsObjectStore::new(client)) as ObjectStoreRef;
         Ok((store, Path::from("/")))

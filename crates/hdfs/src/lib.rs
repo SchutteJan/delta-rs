@@ -10,6 +10,7 @@ use deltalake_core::{DeltaResult, Path};
 use url::Url;
 use hdfs_native_object_store::HdfsObjectStore;
 use hdfs_native::Client;
+
 mod config;
 pub mod error;
 
@@ -41,11 +42,23 @@ impl ObjectStoreFactory for HdfsFactory {
         url: &Url,
         options: &StorageOptions,
     ) -> DeltaResult<(ObjectStoreRef, Path)> {
+        // TODO: Do something with this config helper
         let _config = config::HdfsConfigHelper::try_new(options.as_hdfs_options())?;
-        let client = Arc::new(Client::new(url.to_string().as_str()).unwrap());
+        let path = Path::from(url.path());
 
-        let store = Arc::new(HdfsObjectStore::new(client)) as ObjectStoreRef;
-        Ok((store, Path::from("/")))
+        match url.has_host() {
+            true => {
+                let store = Arc::new(
+                    HdfsObjectStore::with_url(url.to_string().as_str())
+                        .unwrap()) as ObjectStoreRef;
+                Ok((store, path))
+            }
+            false => {
+                let client = Arc::new(Client::default());
+                let store = Arc::new(HdfsObjectStore::new(client)) as ObjectStoreRef;
+                Ok((store, path))
+            }
+        }
     }
 }
 
@@ -63,8 +76,7 @@ impl LogStoreFactory for HdfsFactory {
 /// Register an [ObjectStoreFactory] for hdfs [Url] scheme
 pub fn register_handlers(_additional_prefixes: Option<Url>) {
     let factory = Arc::new(HdfsFactory {});
-    let scheme = &"hdfs";
-    let url = Url::parse(&format!("{}://", scheme)).unwrap();
+    let url = Url::parse("hdfs://").unwrap();
     factories().insert(url.clone(), factory.clone());
     logstores().insert(url.clone(), factory.clone());
 }

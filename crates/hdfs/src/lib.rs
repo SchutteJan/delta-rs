@@ -1,37 +1,14 @@
-use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use deltalake_core::logstore::{default_logstore, logstores, LogStore, LogStoreFactory};
 use deltalake_core::storage::{
-    factories, ObjectStoreFactory, ObjectStoreRef, StorageOptions,
+    factories, url_prefix_handler, ObjectStoreFactory, ObjectStoreRef, StorageOptions,
 };
 use deltalake_core::{DeltaResult, Path};
-use url::Url;
 use hdfs_native_object_store::HdfsObjectStore;
-use hdfs_native::Client;
+use url::Url;
 
-mod config;
 pub mod error;
-
-
-trait HdfsOptions {
-    fn as_hdfs_options(&self) -> HashMap<config::HdfsConfigKey, String>;
-}
-
-impl HdfsOptions for StorageOptions {
-    fn as_hdfs_options(&self) -> HashMap<config::HdfsConfigKey, String> {
-        self.0
-            .iter()
-            .filter_map(|(key, value)| {
-                Some((
-                    config::HdfsConfigKey::from_str(&key.to_ascii_lowercase()).ok()?,
-                    value.clone(),
-                ))
-            })
-            .collect()
-    }
-}
 
 #[derive(Clone, Default, Debug)]
 pub struct HdfsFactory {}
@@ -42,23 +19,12 @@ impl ObjectStoreFactory for HdfsFactory {
         url: &Url,
         options: &StorageOptions,
     ) -> DeltaResult<(ObjectStoreRef, Path)> {
-        // TODO: Do something with this config helper
-        let _config = config::HdfsConfigHelper::try_new(options.as_hdfs_options())?;
-        let path = Path::from(url.path());
-
-        match url.has_host() {
-            true => {
-                let store = Arc::new(
-                    HdfsObjectStore::with_url(url.to_string().as_str())
-                        .unwrap()) as ObjectStoreRef;
-                Ok((store, path))
-            }
-            false => {
-                let client = Arc::new(Client::default());
-                let store = Arc::new(HdfsObjectStore::new(client)) as ObjectStoreRef;
-                Ok((store, path))
-            }
-        }
+        let store: ObjectStoreRef = Arc::new(HdfsObjectStore::with_config(
+            url.as_str(),
+            options.0.clone(),
+        )?);
+        let prefix = Path::parse(url.path())?;
+        Ok((url_prefix_handler(store, prefix.clone()), prefix))
     }
 }
 
@@ -73,10 +39,12 @@ impl LogStoreFactory for HdfsFactory {
     }
 }
 
-/// Register an [ObjectStoreFactory] for hdfs [Url] scheme
+/// Register an [ObjectStoreFactory] for common HDFS [Url] schemes
 pub fn register_handlers(_additional_prefixes: Option<Url>) {
     let factory = Arc::new(HdfsFactory {});
-    let url = Url::parse("hdfs://").unwrap();
-    factories().insert(url.clone(), factory.clone());
-    logstores().insert(url.clone(), factory.clone());
+    for scheme in ["hdfs", "viewfs"].iter() {
+        let url = Url::parse(&format!("{}://", scheme)).unwrap();
+        factories().insert(url.clone(), factory.clone());
+        logstores().insert(url.clone(), factory.clone());
+    }
 }
